@@ -240,7 +240,7 @@ tfoot td { color:#fff; font-weight:600; padding:12px 11px; border:none; }
     <div class="modal-meta">
       <div class="mf full"><label>Estudiante(s)</label><input type="text" id="r-students" readonly></div>
       <div class="mf full"><label>Título del estudio</label><textarea id="r-title" rows="2" readonly></textarea></div>
-      <div class="mf"><label>Director(a)</label><input type="text" id="r-director" placeholder="Nombre del director/a"></div>
+      <div class="mf"><label>Evaluador(a)</label><input type="text" id="r-evaluador" placeholder="Nombre del evauluador/a"></div>
       <div class="mf"><label>Evaluador(a)</label><input type="text" id="r-evaluator" readonly></div>
     </div>
     <div class="legend">
@@ -473,7 +473,7 @@ function openRubric(id) {
   document.getElementById('r-students').value  = p.students.join(', ');
   document.getElementById('r-title').value     = p.title;
   document.getElementById('r-evaluator').value = user ? user.name : '';
-  document.getElementById('r-director').value  = '';
+  document.getElementById('r-evaluador').value  = '';
   document.getElementById('r-obs').value       = '';
   ITEMS.forEach(it => { const s=document.querySelector(`input[name="ri${it.n}"]:checked`); if(s) s.checked=false; document.getElementById('cs'+it.n).textContent='—'; });
   document.getElementById('grand-total').textContent  = '0.00';
@@ -498,7 +498,7 @@ document.getElementById('btn-dl').addEventListener('click', async () => {
           AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign } = docx;
   const students  = document.getElementById('r-students').value;
   const titleVal  = document.getElementById('r-title').value;
-  const director  = document.getElementById('r-director').value || '—';
+  const evaluador  = document.getElementById('r-evaluador').value || '—';
   const evaluator = document.getElementById('r-evaluator').value || '—';
   const obs       = document.getElementById('r-obs').value || '(Sin observaciones)';
   const total     = document.getElementById('grand-total').textContent;
@@ -528,7 +528,7 @@ document.getElementById('btn-dl').addEventListener('click', async () => {
     new Table({width:{size:9360,type:WidthType.DXA},columnWidths:[2200,7160],rows:[
       new TableRow({children:[lC('Estudiante(s)',2200),vC(students,7160)]}),
       new TableRow({children:[lC('Título',2200),vC(titleVal,7160)]}),
-      new TableRow({children:[lC('Director(a)',2200),vC(director,7160)]}),
+      new TableRow({children:[lC('Evaluador(a)',2200),vC(evaluador,7160)]}),
       new TableRow({children:[lC('Evaluador(a)',2200),vC(evaluator,7160)]}),
     ]}),
     new Paragraph({spacing:{before:280,after:120},children:[new TextRun({text:'CRITERIOS DE EVALUACIÓN',bold:true,size:24,font:'Arial',color:navy})]}),
@@ -547,13 +547,13 @@ document.getElementById('btn-dl').addEventListener('click', async () => {
   ITEMS.forEach(it => { const s=document.querySelector(`input[name="ri${it.n}"]:checked`); scores[it.n]=s?`${s.value} (${document.getElementById('cs'+it.n).textContent})`:'—'; });
   const ts = new Date().toLocaleString('es-CO', {dateStyle:'short', timeStyle:'short'});
   const idx = saved.findIndex(e=>e.pid===openProjectId && e.email===(user?user.email:''));
-  const entry = {pid:openProjectId,evaluator,email:user?user.email:'',director,scores,total,obs,ts};
+  const entry = {pid:openProjectId,evaluator,email:user?user.email:'',evaluador,scores,total,obs,ts};
   if(idx>=0) saved[idx]=entry; else saved.push(entry);
   // Send rubric scores to Google Sheets
   const p = projects.find(x=>x.id===openProjectId);
   const scoresArr = ITEMS.map(it => scores[it.n] || '—');
   try {
-    const rubData = {pid:openProjectId, time:p?p.time:'', title:p?p.title:'', evaluator, email:user?user.email:'', director, ts, total, obs, scores:scoresArr};
+    const rubData = {pid:openProjectId, time:p?p.time:'', title:p?p.title:'', evaluator, email:user?user.email:'', evaluador, ts, total, obs, scores:scoresArr};
     await fetch(`${GAS_URL}?action=guardarRubrica&data=${encodeURIComponent(JSON.stringify(rubData))}`, {mode:'no-cors'});
   } catch(e) { console.log('Error guardando rúbrica:', e); }
   const blob = await Packer.toBlob(document2);
@@ -581,11 +581,11 @@ document.getElementById('btn-excel').addEventListener('click', () => {
   ws1['!cols'] = [12,55,32,24,30,18,24,30,18,10].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws1, 'Inscripciones');
   // Sheet 2
-  const hdr2 = ['Hora','Título','Estudiante(s)','Evaluador','Correo','Director',...ITEMS.map(i=>`${i.n}.${i.el.substring(0,25)}`),'TOTAL /200','Observaciones'];
+  const hdr2 = ['Hora','Título','Estudiante(s)','Evaluador','Correo','Evaluador',...ITEMS.map(i=>`${i.n}.${i.el.substring(0,25)}`),'TOTAL /200','Observaciones'];
   const s2 = [hdr2];
   saved.forEach(ev => {
     const p=PROJECTS.find(x=>x.id===ev.pid);
-    s2.push([p?p.time:'—',p?p.title:'—',p?p.students.join(' / '):'—',ev.evaluator,ev.email,ev.director,...ITEMS.map(it=>ev.scores[it.n]||'—'),ev.total,ev.obs]);
+    s2.push([p?p.time:'—',p?p.title:'—',p?p.students.join(' / '):'—',ev.evaluator,ev.email,ev.evaluador,...ITEMS.map(it=>ev.scores[it.n]||'—'),ev.total,ev.obs]);
   });
   if(s2.length===1) s2.push(['No hay rúbricas guardadas aún.']);
   const ws2 = XLSX.utils.aoa_to_sheet(s2);
@@ -634,7 +634,7 @@ async function loadFromSheets() {
     // Rebuild saved rubrics
     saved = rubRows.slice(1).filter(r=>r[0]).map(r=>({
       pid:Number(r[0]), time:r[1], title:r[2], evaluator:r[3], email:r[4],
-      director:r[5], ts:r[6], total:r[7], obs:r[8],
+      evaluador:r[5], ts:r[6], total:r[7], obs:r[8],
       scores: Object.fromEntries(ITEMS.map((it,i)=>[it.n, r[9+i]||'—']))
     }));
     renderAll();
