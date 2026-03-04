@@ -284,6 +284,7 @@ tfoot td { color:#fff; font-weight:600; padding:12px 11px; border:none; }
 <script>
 // ── DATA ──
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbz9pSl9nqt5osxp87_FuzjStCENP2oTN-n4CGBF5mfJn45sS1IBgaiDQetkMYQ7W8cL/exec';
+const ADMIN = 'mdgarcia@poligran.edu.co';
 const MAX_EV = 2;
 const MID = { C: 0.75, D: 2.55, E: 4.3 };
 
@@ -318,7 +319,11 @@ const PROJECTS = [
 
 let user = null;
 let openProjectId = null;
-const saved = [];
+let projects = PROJECTS.map(p => ({...p, evaluators:[]}));
+let saved = [];
+
+function setProjects(p) { projects = p; renderAll(); }
+function setSaved(s) { saved = s; }
 
 // ── RUBRIC TABLE ──
 (function buildRubric() {
@@ -365,7 +370,7 @@ function doLogin() {
   document.getElementById('main-wrap').style.display   = 'block';
   document.getElementById('intro-block').style.display = 'none';
   if (email === ADMIN) document.getElementById('coord').style.display = 'flex';
-  renderAll();
+  loadFromSheets();
 }
 
 document.getElementById('btn-out').addEventListener('click', () => {
@@ -380,7 +385,7 @@ document.getElementById('btn-out').addEventListener('click', () => {
 
 // ── INSCRIPCIÓN ──
 async function join(id) {
-  const p = PROJECTS.find(x => x.id === id);
+  const p = projects.find(x => x.id === id);
   if (!p || p.evaluators.length >= MAX_EV) return;
   if (p.evaluators.find(e => e.email === user.email)) return;
   const ts = new Date().toLocaleString('es-CO', {dateStyle:'short', timeStyle:'short'});
@@ -388,8 +393,10 @@ async function join(id) {
     ? {...x, evaluators: [...x.evaluators, {name:user.name, email:user.email, ts}]}
     : x);
   setProjects(updated);
-  await fetch(`${GAS_URL}?action=inscribir&data=${encodeURIComponent(JSON.stringify({pid:id, time:p.time, title:p.title, email:user.email, name:user.name, ts}))}`);
-  showToast('✓ Inscrito correctamente');
+  try {
+    await fetch(`${GAS_URL}?action=inscribir&data=${encodeURIComponent(JSON.stringify({pid:id, time:p.time, title:p.title, email:user.email, name:user.name, ts}))}`, {mode:'no-cors'});
+  } catch(e) { console.log('GAS fetch error:', e); }
+  toast('✓ Inscrito correctamente');
 }
   
 async function leave(id) {
@@ -397,17 +404,19 @@ async function leave(id) {
     ? {...x, evaluators: x.evaluators.filter(e => e.email !== user.email)}
     : x);
   setProjects(updated);
-  await fetch(`${GAS_URL}?action=inscribir&data=${encodeURIComponent(JSON.stringify({pid:id, email:user.email, action_type:'cancelar'}))}`);
-  showToast('Inscripción cancelada.');
+  try {
+    await fetch(`${GAS_URL}?action=inscribir&data=${encodeURIComponent(JSON.stringify({pid:id, email:user.email, action_type:'cancelar'}))}`, {mode:'no-cors'});
+  } catch(e) { console.log('GAS fetch error:', e); }
+  toast('Inscripción cancelada.');
 }
 
 // ── RENDER ──
 function renderAll() { renderCards(); renderMyPanel(); renderCounter(); }
 
 function renderCards() {
-  const mine = PROJECTS.filter(p => p.evaluators.find(e => e.email === user.email)).length;
-  document.getElementById('stcount').textContent = `${PROJECTS.length} trabajos · ${mine} seleccionados`;
-  document.getElementById('cards').innerHTML = PROJECTS.map(p => {
+  const mine = projects.filter(p => p.evaluators.find(e => e.email === user.email)).length;
+  document.getElementById('stcount').textContent = `${projects.length} trabajos · ${mine} seleccionados`;
+  document.getElementById('cards').innerHTML = projects.map(p => {
     const isMine = !!p.evaluators.find(e => e.email === user.email);
     const isFull = p.evaluators.length >= MAX_EV && !isMine;
     const slots  = MAX_EV - p.evaluators.length;
@@ -441,22 +450,22 @@ function renderCards() {
 }
 
 function renderMyPanel() {
-  const mine = PROJECTS.filter(p => p.evaluators.find(e => e.email === user.email));
+  const mine = projects.filter(p => p.evaluators.find(e => e.email === user.email));
   document.getElementById('my-list').innerHTML = mine.length
     ? mine.map(p=>`<div class="my-item"><span class="my-time">${p.time}</span><span>${p.title.substring(0,70)}${p.title.length>70?'…':''}</span></div>`).join('')
     : '<p class="empty">Aún no te has inscrito a ningún trabajo.</p>';
 }
 
 function renderCounter() {
-  const tot  = PROJECTS.reduce((a,p)=>a+p.evaluators.length,0);
-  const full = PROJECTS.filter(p=>p.evaluators.length>=MAX_EV).length;
+  const tot  = projects.reduce((a,p)=>a+p.evaluators.length,0);
+  const full = projects.filter(p=>p.evaluators.length>=MAX_EV).length;
   document.getElementById('cbar').innerHTML =
     `<strong>${tot}</strong> evaluadores inscritos · <strong>${full}</strong> de ${PROJECTS.length} trabajos con cupo completo`;
 }
 
 // ── RÚBRICA ──
 function openRubric(id) {
-  const p = PROJECTS.find(x=>x.id===id);
+  const p = projects.find(x=>x.id===id);
   if (!p) return;
   openProjectId = id;
   document.getElementById('modal-title').textContent = `Rúbrica · ${p.time}`;
@@ -535,9 +544,17 @@ document.getElementById('btn-dl').addEventListener('click', async () => {
   // Save for Excel
   const scores = {};
   ITEMS.forEach(it => { const s=document.querySelector(`input[name="ri${it.n}"]:checked`); scores[it.n]=s?`${s.value} (${document.getElementById('cs'+it.n).textContent})`:'—'; });
+  const ts = new Date().toLocaleString('es-CO', {dateStyle:'short', timeStyle:'short'});
   const idx = saved.findIndex(e=>e.pid===openProjectId && e.email===(user?user.email:''));
-  const entry = {pid:openProjectId,evaluator,email:user?user.email:'',director,scores,total,obs};
+  const entry = {pid:openProjectId,evaluator,email:user?user.email:'',director,scores,total,obs,ts};
   if(idx>=0) saved[idx]=entry; else saved.push(entry);
+  // Send rubric scores to Google Sheets
+  const p = projects.find(x=>x.id===openProjectId);
+  const scoresArr = ITEMS.map(it => scores[it.n] || '—');
+  try {
+    const rubData = {pid:openProjectId, time:p?p.time:'', title:p?p.title:'', evaluator, email:user?user.email:'', director, ts, total, obs, scores:scoresArr};
+    await fetch(`${GAS_URL}?action=guardarRubrica&data=${encodeURIComponent(JSON.stringify(rubData))}`, {mode:'no-cors'});
+  } catch(e) { console.log('Error guardando rúbrica:', e); }
   const blob = await Packer.toBlob(document2);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -555,7 +572,7 @@ document.getElementById('btn-excel').addEventListener('click', () => {
   const wb = XLSX.utils.book_new();
   // Sheet 1
   const s1 = [['Hora','Título','Estudiante(s)','Evaluador 1','Correo 1','Inscripción 1','Evaluador 2','Correo 2','Inscripción 2','Cupos libres']];
-  PROJECTS.forEach(p => {
+  projects.forEach(p => {
     const e1=p.evaluators[0], e2=p.evaluators[1];
     s1.push([p.time,p.title,p.students.join(' / '),e1?e1.name:'—',e1?e1.email:'—',e1?e1.ts:'—',e2?e2.name:'—',e2?e2.email:'—',e2?e2.ts:'—',Math.max(0,MAX_EV-p.evaluators.length)]);
   });
@@ -576,13 +593,13 @@ document.getElementById('btn-excel').addEventListener('click', () => {
   // Sheet 3
   const s3 = [
     ['RESUMEN GENERAL',''],
-    ['Total trabajos',PROJECTS.length],
-    ['Total evaluadores inscritos',PROJECTS.reduce((a,p)=>a+p.evaluators.length,0)],
-    ['Trabajos con cupo completo',PROJECTS.filter(p=>p.evaluators.length>=MAX_EV).length],
-    ['Trabajos sin evaluador',PROJECTS.filter(p=>p.evaluators.length===0).length],
+    ['Total trabajos',projects.length],
+    ['Total evaluadores inscritos',projects.reduce((a,p)=>a+p.evaluators.length,0)],
+    ['Trabajos con cupo completo',projects.filter(p=>p.evaluators.length>=MAX_EV).length],
+    ['Trabajos sin evaluador',projects.filter(p=>p.evaluators.length===0).length],
     ['Rúbricas completadas',saved.length],['',''],
     ['DETALLE','Evaluadores'],
-    ...PROJECTS.map(p=>[p.title.substring(0,60),`${p.evaluators.length} / ${MAX_EV}`])
+    ...projects.map(p=>[p.title.substring(0,60),`${p.evaluators.length} / ${MAX_EV}`])
   ];
   const ws3 = XLSX.utils.aoa_to_sheet(s3);
   ws3['!cols'] = [{wch:62},{wch:20}];
@@ -594,13 +611,14 @@ document.getElementById('btn-excel').addEventListener('click', () => {
 
 // ── TOAST ──
 
-  async function loadFromSheets() {
+async function loadFromSheets() {
+  toast('🔄 Sincronizando datos...');
   try {
     const res = await fetch(`${GAS_URL}?action=getAll`);
     const json = await res.json();
-    if (!json.ok) return;
-    const rows = json.data.inscripciones;
-    const rubRows = json.data.rubricas;
+    if (!json.ok) { renderAll(); return; }
+    const rows = json.data.inscripciones || [];
+    const rubRows = json.data.rubricas || [];
     // Rebuild evaluators from sheet
     const fresh = PROJECTS.map(p => ({...p, evaluators:[]}));
     rows.slice(1).forEach(r => {
@@ -608,19 +626,26 @@ document.getElementById('btn-excel').addEventListener('click', () => {
       const p = fresh.find(x => x.id == r[0]);
       if (p && p.evaluators.length < MAX_EV) {
         if (!p.evaluators.find(e => e.email === r[3]))
-          p.evaluators.push({name:r[4], email:r[3], ts:r[5]});
+          p.evaluators.push({name:r[4]||'', email:r[3]||'', ts:r[5]||''});
       }
     });
-    setProjects(fresh);
+    projects = fresh;
     // Rebuild saved rubrics
-    const freshSaved = rubRows.slice(1).filter(r=>r[0]).map(r=>({
+    saved = rubRows.slice(1).filter(r=>r[0]).map(r=>({
       pid:Number(r[0]), time:r[1], title:r[2], evaluator:r[3], email:r[4],
       director:r[5], ts:r[6], total:r[7], obs:r[8],
       scores: Object.fromEntries(ITEMS.map((it,i)=>[it.n, r[9+i]||'—']))
     }));
-    setSaved(freshSaved);
-  } catch(e) { console.log('Error cargando datos:', e); }
+    renderAll();
+    toast('✓ Datos actualizados');
+  } catch(e) {
+    console.log('Error cargando datos:', e);
+    renderAll();
+  }
 }
+
+// Auto-refresh every 20 seconds
+setInterval(() => { if (user) loadFromSheets(); }, 20000);
   
 function toast(msg) {
   const t = document.getElementById('toast');
