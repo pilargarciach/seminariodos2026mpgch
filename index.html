@@ -283,7 +283,7 @@ tfoot td { color:#fff; font-weight:600; padding:12px 11px; border:none; }
 
 <script>
 // ── DATA ──
-const ADMIN = 'mdgarcia@poligran.edu.co';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbz9pSl9nqt5osxp87_FuzjStCENP2oTN-n4CGBF5mfJn45sS1IBgaiDQetkMYQ7W8cL/exec';
 const MAX_EV = 2;
 const MID = { C: 0.75, D: 2.55, E: 4.3 };
 
@@ -379,21 +379,26 @@ document.getElementById('btn-out').addEventListener('click', () => {
 });
 
 // ── INSCRIPCIÓN ──
-function join(id) {
+async function join(id) {
   const p = PROJECTS.find(x => x.id === id);
   if (!p || p.evaluators.length >= MAX_EV) return;
   if (p.evaluators.find(e => e.email === user.email)) return;
   const ts = new Date().toLocaleString('es-CO', {dateStyle:'short', timeStyle:'short'});
-  p.evaluators.push({ name: user.name, email: user.email, ts });
-  renderAll();
-  toast('✓ Inscrito correctamente');
+  const updated = projects.map(x => x.id === id
+    ? {...x, evaluators: [...x.evaluators, {name:user.name, email:user.email, ts}]}
+    : x);
+  setProjects(updated);
+  await fetch(`${GAS_URL}?action=inscribir&data=${encodeURIComponent(JSON.stringify({pid:id, time:p.time, title:p.title, email:user.email, name:user.name, ts}))}`);
+  showToast('✓ Inscrito correctamente');
 }
-function leave(id) {
-  const p = PROJECTS.find(x => x.id === id);
-  if (!p) return;
-  p.evaluators = p.evaluators.filter(e => e.email !== user.email);
-  renderAll();
-  toast('Inscripción cancelada.');
+  
+async function leave(id) {
+  const updated = projects.map(x => x.id === id
+    ? {...x, evaluators: x.evaluators.filter(e => e.email !== user.email)}
+    : x);
+  setProjects(updated);
+  await fetch(`${GAS_URL}?action=inscribir&data=${encodeURIComponent(JSON.stringify({pid:id, email:user.email, action_type:'cancelar'}))}`);
+  showToast('Inscripción cancelada.');
 }
 
 // ── RENDER ──
@@ -588,6 +593,35 @@ document.getElementById('btn-excel').addEventListener('click', () => {
 });
 
 // ── TOAST ──
+
+  async function loadFromSheets() {
+  try {
+    const res = await fetch(`${GAS_URL}?action=getAll`);
+    const json = await res.json();
+    if (!json.ok) return;
+    const rows = json.data.inscripciones;
+    const rubRows = json.data.rubricas;
+    // Rebuild evaluators from sheet
+    const fresh = PROJECTS.map(p => ({...p, evaluators:[]}));
+    rows.slice(1).forEach(r => {
+      if (!r[0]) return;
+      const p = fresh.find(x => x.id == r[0]);
+      if (p && p.evaluators.length < MAX_EV) {
+        if (!p.evaluators.find(e => e.email === r[3]))
+          p.evaluators.push({name:r[4], email:r[3], ts:r[5]});
+      }
+    });
+    setProjects(fresh);
+    // Rebuild saved rubrics
+    const freshSaved = rubRows.slice(1).filter(r=>r[0]).map(r=>({
+      pid:Number(r[0]), time:r[1], title:r[2], evaluator:r[3], email:r[4],
+      director:r[5], ts:r[6], total:r[7], obs:r[8],
+      scores: Object.fromEntries(ITEMS.map((it,i)=>[it.n, r[9+i]||'—']))
+    }));
+    setSaved(freshSaved);
+  } catch(e) { console.log('Error cargando datos:', e); }
+}
+  
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
