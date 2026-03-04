@@ -580,7 +580,7 @@ document.getElementById('btn-dl').addEventListener('click', async () => {
   </table>
   <div class="obs"><strong>Observaciones y retroalimentación:</strong><br>${obs}</div>
   <div class="firma">Firma del evaluador(a): ___________________________&nbsp;&nbsp;&nbsp;&nbsp;Fecha: _______________</div>
-  <br><button onclick="window.print()" style="padding:10px 20px;background:#0d1b2a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir / Guardar como PDF</button>
+  <br><button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
   </body></html>`;
 
   const win = window.open('', '_blank');
@@ -679,7 +679,6 @@ function toast(msg) {
 </script>
 
 <!-- CDNs al final para no bloquear nada -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.browser.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </body>
 </html>
