@@ -472,7 +472,7 @@ function openRubric(id) {
   document.getElementById('modal-title').textContent = `Rúbrica · ${p.time}`;
   document.getElementById('r-students').value  = p.students.join(', ');
   document.getElementById('r-title').value     = p.title;
-  document.getElementById('r-director').value = user ? user.name : '';
+  document.getElementById('r-director').value =  '';
   document.getElementById('r-evaluator').value = user ? user.name : '';
   document.getElementById('r-obs').value       = '';
   ITEMS.forEach(it => { const s=document.querySelector(`input[name="ri${it.n}"]:checked`); if(s) s.checked=false; document.getElementById('cs'+it.n).textContent='—'; });
